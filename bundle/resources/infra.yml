@@ -19,3 +19,7 @@ resources:
     # so this is optional for the local agent loop but kept to mirror the real apps.
     memory_experiment:
       name: /Users/${workspace.current_user.userName}/agent-memory-pipeline
+      # Pin the experiment type to GenAI/LLM so the UI doesn't prompt and we don't drift.
+      tags:
+        - key: mlflow.experimentKind
+          value: genai_development

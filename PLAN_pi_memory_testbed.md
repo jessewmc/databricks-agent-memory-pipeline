@@ -58,7 +58,10 @@ explicitly bless this (`session_start` to start, `session_shutdown` to stop).
   volume `dreamer_logs`.
 - Provisioned Lakebase: native DAB `database_instances` resource (CLI v1.1.0 supports it;
   no provisioning job needed). Name `agent-memory-jesse-meade-clift`, capacity `CU_1`.
-- `user_id` for pi sessions: Databricks username `jesse.meade-clift@clio.com`.
+- `user_id` for pi sessions: **`jesse_meadeclift`** (namespace-safe). LangGraph store
+  namespaces cannot contain periods, so the raw email is invalid as a namespace label.
+  The sidecar (store namespace) and the transcript writer (`ai_chatbot.Chat.userId`) MUST
+  use this same sanitized value so the dreamer writes into the right user namespace.
 - User-scoping: `staging_dev` uses `mode: development` (auto prefix + dev/owner/project
   tags). database_instance is NOT auto-prefixed by dev mode, so it is manually scoped via
   the `owner_slug` var + `custom_tags`.
@@ -72,8 +75,20 @@ schemas/volumes/catalogs. experiment, app, and database_instance are declared in
 - [x] **Phase 1 — DAB skeleton** (`bundle/`): schema + volume (Python) and
       database_instance + experiment (YAML). `databricks bundle validate -t staging_dev`
       passes; resolved names confirmed user-scoped.
-- [ ] Phase 2 — provision Lakebase + schema + grants
-- [ ] Phase 3 — Python sidecar
+- [x] **Phase 2 — provision Lakebase + schema + verify backend**. Deployed bundle to
+      staging_dev; Lakebase instance `agent-memory-jesse-meade-clift` AVAILABLE (CU_1,
+      PG16). Created `memories` schema; `AsyncCheckpointSaver.setup()` +
+      `AsyncDatabricksStore.setup()` created all 8 tables (checkpoints*, store*,
+      *_migrations, store_vectors). Verified write→embed→semantic-search→delete round
+      trip against `databricks-gte-large-en` (1024-dim). No SP grants needed locally —
+      the instance creator has full privileges; admin-app SP grants come in Phase 7.
+      Experiment kind pinned to GenAI (`mlflow.experimentKind=genai_development`) in the
+      bundle; existing experiment patched once via API (DAB only sets tags at create).
+- [x] **Phase 3 — Python sidecar** (`pi-memory/sidecar/`). `memory_core.py` ports all
+      9 tool bodies + preamble from `utils_memory.py` as framework-agnostic async fns;
+      `server.py` is a FastAPI service with one long-lived `AsyncDatabricksStore`.
+      Verified live: health, write/ls/search (semantic 0.561)/edit/preamble/delete +
+      graceful invalid-path handling. `user_id` sanitized defensively (no periods).
 - [ ] Phase 4 — pi extension
 - [ ] Phase 5 — transcript writer
 - [ ] Phase 6 — dreamer jobs

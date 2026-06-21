@@ -1,0 +1,20 @@
+[project]
+name = "pi-memory-sidecar"
+version = "0.1.0"
+description = "Local FastAPI sidecar exposing Lakebase agent memory tools to pi"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "pydantic>=2.0.0",
+    "databricks-langchain[memory]>=0.20.0",
+    "databricks-ai-bridge>=0.20.0",
+    "databricks-sdk>=0.79.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+sidecar = "server:main"
+
+[tool.uv]
+package = false
