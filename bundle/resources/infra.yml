@@ -1,0 +1,21 @@
+# Resource types without a typed databricks-bundles (PyDABs) builder in 1.4.0.
+# Declared in YAML and merged with the Python resources.
+
+resources:
+  database_instances:
+    # Provisioned Lakebase (managed Postgres) backing the dual-layer memory store.
+    # dev mode does NOT auto-prefix/tag database instances, so scope it manually.
+    memory_lakebase:
+      name: agent-memory-${var.owner_slug}
+      capacity: ${var.lakebase_capacity}
+      custom_tags:
+        - key: owner
+          value: jesse.meade-clift@clio.com
+        - key: project
+          value: agent_memory_pipeline
+
+  experiments:
+    # MLflow experiment for traces (dreamer jobs / admin app). pi has its own tracing,
+    # so this is optional for the local agent loop but kept to mirror the real apps.
+    memory_experiment:
+      name: /Users/${workspace.current_user.userName}/agent-memory-pipeline

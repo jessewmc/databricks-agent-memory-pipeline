@@ -1,0 +1,61 @@
+bundle:
+  name: agent_memory_pipeline
+
+# Hybrid Databricks Asset Bundle.
+#
+# Resources are defined two ways:
+#   * Python (PyDABs)  -> resources/memory_pipeline.py  (schema, volume, dreamer jobs)
+#   * YAML             -> resources/*.yml               (database_instance, experiment,
+#                                                         app — types without a typed
+#                                                         databricks-bundles builder)
+# The CLI merges both into one bundle.
+
+include:
+  - resources/*.yml
+
+experimental:
+  python:
+    # Loader function "module:function" returning a databricks.bundles.core.Resources.
+    resources:
+      - "resources.memory_pipeline:load_resources"
+    # The CLI runs the loader with this interpreter; created by `uv sync` (see README).
+    venv_path: .venv
+
+variables:
+  catalog:
+    description: Unity Catalog for the demo schema/volume.
+    default: de_staging
+  schema_name:
+    description: Schema that holds the dreamer_logs volume (dev mode prefixes this).
+    default: agent_memory_demo
+  lakebase_capacity:
+    description: Provisioned Lakebase SKU (CU_1 | CU_2 | CU_4 | CU_8).
+    default: CU_1
+  owner_slug:
+    description: >-
+      Hyphenated owner identifier used to user-scope resources that dev mode does
+      not auto-prefix (e.g. the Lakebase instance, whose name must be lowercase
+      letters/digits/hyphens — no underscores).
+    default: jesse-meade-clift
+
+targets:
+  # Developer sandbox. mode: development auto-prefixes resource names with
+  # "[dev <short_name>]", tags them dev/owner, and pauses schedules — keeping
+  # everything scoped to the deploying user.
+  staging_dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-8ce48177-2476.cloud.databricks.com
+    presets:
+      tags:
+        project: agent_memory_pipeline
+        owner: jesse.meade-clift@clio.com
+
+  staging:
+    mode: production
+    workspace:
+      host: https://dbc-8ce48177-2476.cloud.databricks.com
+    presets:
+      tags:
+        project: agent_memory_pipeline
