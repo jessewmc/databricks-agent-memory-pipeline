@@ -89,8 +89,26 @@ schemas/volumes/catalogs. experiment, app, and database_instance are declared in
       `server.py` is a FastAPI service with one long-lived `AsyncDatabricksStore`.
       Verified live: health, write/ls/search (semantic 0.561)/edit/preamble/delete +
       graceful invalid-path handling. `user_id` sanitized defensively (no periods).
-- [ ] Phase 4 — pi extension
+- [x] **Phase 4 — pi extension** (`pi-memory/extension/`). `index.ts` spawns the
+      sidecar on `session_start` (idempotent, health-gated to 45s, stderr surfaced on
+      failure), registers the 9 memory tools (descriptions mirror `utils_memory.py`)
+      forwarding to `/invoke`, injects the cached session-start preamble into the
+      system prompt via `before_agent_start`, and stops the sidecar on
+      `session_shutdown` (intentional SIGTERM no longer reported as an error).
+      `package.json` declares the entry + dev type deps. Config read from
+      `pi-memory/.env` (gitignored) or process env; user_id sent per call.
+      **Opt-in toggle:** memory is OFF by default — enable via `pi --memory`,
+      `PI_MEMORY_ENABLED=1`, or the in-session `/memory on|off|status` command.
+      When off the sidecar never starts, the 9 tools are deactivated (via
+      `setActiveTools`) and refuse if called, and no preamble is injected.
+      Live e2e against Lakebase (de_staging re-authed) passed end to end:
+      session_start with no flag → 0 active tools; `/memory on` → sidecar up + 9
+      tools active + preamble injected; write/ls/read/edit/search (score 0.871)/
+      delete round trip; graceful invalid-path; `/memory off` → 0 tools and tool
+      refusal; clean shutdown.
 - [ ] Phase 5 — transcript writer
+      (note: writer must use the same sanitized `PI_MEMORY_USER_ID` for
+      `ai_chatbot.Chat.userId` so the dreamer writes into the right user namespace)
 - [ ] Phase 6 — dreamer jobs
 - [ ] Phase 7 — admin app
 

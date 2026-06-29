@@ -15,9 +15,49 @@ the provisioned Lakebase instance + `databricks-gte-large-en` embeddings.
 - `sidecar/` — FastAPI service exposing the 9 memory tools + a preamble endpoint.
   - `memory_core.py` — framework-agnostic memory ops (no LangChain).
   - `server.py` — HTTP dispatch + long-lived `AsyncDatabricksStore`.
-- `extension/` — pi TypeScript extension (Phase 4): starts/stops the sidecar,
-  registers the tools, writes transcripts on `session_shutdown` (Phase 5).
+- `extension/` — pi TypeScript extension: starts/stops the sidecar, registers the
+  9 memory tools, and injects the session-start memory snapshot into the system
+  prompt. (Transcript writing on `session_shutdown` lands in Phase 5.)
 - `.env.example` — config (instance name, schema, embedding, user id, port).
+  Copy to `pi-memory/.env`; both the extension and the sidecar read it.
+
+## Run with pi (the extension)
+```bash
+cp .env.example .env            # then edit (instance, profile, user id)
+# the extension spawns the sidecar; make its venv/deps available first:
+cd sidecar && uv venv --python 3.12 && uv sync && cd ..
+
+# load the extension (quick test):
+pi -e pi-memory/extension/index.ts            # memory OFF (opt-in)
+pi -e pi-memory/extension/index.ts --memory   # memory ON from launch
+# or symlink into .pi/extensions/ for auto-discovery + /reload
+```
+
+### Enabling / disabling memory (opt-in)
+Memory is **off by default**. Turn it on either way:
+- **At launch:** `pi --memory` (or `--memory=false` to force off).
+- **In session:** `/memory on`, `/memory off`, `/memory status`.
+- **Default via env:** `PI_MEMORY_ENABLED=1` makes the flag default on (the
+  `--memory` flag still overrides per launch).
+
+When off, the sidecar is not started, the 9 tools are deactivated (not offered to
+the model, and they refuse if called directly), and no memory preamble is injected.
+`/memory on` starts the sidecar, activates the tools, and captures the preamble
+(injected on the next turn); `/memory off` stops the sidecar and deactivates them.
+
+On enable the extension starts the sidecar, waits for `/health`, and caches the
+memory preamble; on `session_shutdown` it stops the sidecar. The 9 tools forward
+to the sidecar `/invoke`. Requires a valid Databricks login for the configured
+profile (`databricks auth login --profile <profile>`) so the sidecar can reach
+Lakebase + embeddings.
+
+Extension env (read from `pi-memory/.env` or process env):
+- `PI_MEMORY_ENABLED` — default state of the `--memory` flag (default off).
+- `PI_MEMORY_PORT` — sidecar port (default 8765).
+- `PI_MEMORY_USER_ID` / `PI_MEMORY_DEFAULT_USER_ID` — namespace-safe user id sent on
+  each call (must match the transcript writer's `ai_chatbot.Chat.userId`).
+- `PI_MEMORY_SIDECAR_CMD` / `PI_MEMORY_SIDECAR_ARGS` — override how the sidecar is
+  spawned (default `uv run python server.py` in `sidecar/`).
 
 ## Run the sidecar standalone (for testing)
 ```bash

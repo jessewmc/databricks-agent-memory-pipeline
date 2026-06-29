@@ -1,0 +1,14 @@
+{
+  "name": "pi-memory-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "pi extension wiring hosted Claude into the repo's dual-layer Lakebase memory via the local sidecar",
+  "type": "module",
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}
