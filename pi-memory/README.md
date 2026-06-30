@@ -84,3 +84,20 @@ cp ../.env.example .env        # then edit
   keep it consistent with the transcript writer's `ai_chatbot.Chat.userId`.
 - Agent-scoped tools are read-only by construction (no write endpoint for the
   `agent_memories` namespace) — the admin app curates that store.
+- **Lakebase scale-to-zero (2h idle):** the provisioned instance is also exposed
+  via the beta Postgres API as `projects/agent-memory-jesse-meade-clift` (same
+  UID as the `database_instance`). Scale-to-zero lives on the compute *endpoint*,
+  not the instance object, so it can't be set from the bundle's
+  `database_instances` resource (databricks-bundles 1.4.0 has no field for it).
+  It was set imperatively via CLI and must be re-applied if the instance is
+  recreated:
+  ```bash
+  databricks postgres update-endpoint \
+    projects/agent-memory-jesse-meade-clift/branches/production/endpoints/primary \
+    spec.suspension \
+    --json '{ "spec": { "suspend_timeout_duration": "7200s" } }' \
+    --profile de_staging
+  # disable again with:  --json '{ "spec": { "no_suspension": true } }'
+  ```
+  Valid range 60s–604800s. After 2h idle the endpoint auto-suspends and wakes on
+  the next connection (the sidecar's first query incurs a cold-start wait).

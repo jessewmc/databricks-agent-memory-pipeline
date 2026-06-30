@@ -5,6 +5,12 @@ resources:
   database_instances:
     # Provisioned Lakebase (managed Postgres) backing the dual-layer memory store.
     # dev mode does NOT auto-prefix/tag database instances, so scope it manually.
+    # NOTE: scale-to-zero is NOT settable here. It lives on the compute endpoint
+    # (Postgres API), not the database_instance object. Set imperatively via:
+    #   databricks postgres update-endpoint \
+    #     projects/<name>/branches/production/endpoints/primary spec.suspension \
+    #     --json '{"spec":{"suspend_timeout_duration":"7200s"}}'
+    # (currently 2h idle). See pi-memory/README.md "Lakebase scale-to-zero".
     memory_lakebase:
       name: agent-memory-${var.owner_slug}
       capacity: ${var.lakebase_capacity}
