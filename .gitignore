@@ -13,3 +13,4 @@ uv.lock
 dist/
 build/
 .ipynb_checkpoints/
+.pi/

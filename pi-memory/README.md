@@ -21,16 +21,31 @@ the provisioned Lakebase instance + `databricks-gte-large-en` embeddings.
 - `.env.example` — config (instance name, schema, embedding, user id, port).
   Copy to `pi-memory/.env`; both the extension and the sidecar read it.
 
-## Run with pi (the extension)
+## Setup (recommended)
+Run the setup script once from anywhere. It is idempotent: it symlinks the
+extension into `.pi/extensions/` for auto-discovery, creates `pi-memory/.env`
+from the example (if missing), and builds the sidecar venv.
+```bash
+./pi-memory/setup.sh
+```
+Then edit `pi-memory/.env`, log in (`databricks auth login --profile <profile>`),
+and launch pi from the repo root (trust the project when prompted):
+```bash
+pi              # extension auto-loads; memory OFF by default
+pi --memory     # extension auto-loads; memory ON from launch
+```
+Because the extension lives in an auto-discovered location, `/reload` hot-reloads
+it after edits.
+
+## Run with pi (manual / quick test)
 ```bash
 cp .env.example .env            # then edit (instance, profile, user id)
 # the extension spawns the sidecar; make its venv/deps available first:
 cd sidecar && uv venv --python 3.12 && uv sync && cd ..
 
-# load the extension (quick test):
+# load the extension without the symlink (quick test, no /reload):
 pi -e pi-memory/extension/index.ts            # memory OFF (opt-in)
 pi -e pi-memory/extension/index.ts --memory   # memory ON from launch
-# or symlink into .pi/extensions/ for auto-discovery + /reload
 ```
 
 ### Enabling / disabling memory (opt-in)
