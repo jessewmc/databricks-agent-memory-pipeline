@@ -29,6 +29,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 import memory_core as mc
+import transcript_core as tc
 
 INSTANCE = os.getenv("LAKEBASE_INSTANCE_NAME")
 SCHEMA = os.getenv("LAKEBASE_AGENT_MEMORY_SCHEMA", "memories")
@@ -73,6 +74,13 @@ class InvokeRequest(BaseModel):
 
 class PreambleRequest(BaseModel):
     user_id: Optional[str] = None
+
+
+class TranscriptRequest(BaseModel):
+    chat_id: str
+    user_id: Optional[str] = None
+    title: str = ""
+    messages: list[dict[str, Any]] = []
 
 
 def _user_ns(user_id: Optional[str]) -> tuple[str, str]:
@@ -127,6 +135,24 @@ async def invoke(req: InvokeRequest):
 async def preamble(req: PreambleRequest):
     text = await mc.build_memory_preamble(app.state.store, _user_ns(req.user_id))
     return {"text": text}
+
+
+@app.post("/transcript")
+async def transcript(req: TranscriptRequest):
+    """Persist a pi session's user/assistant turns into the chat-history tables the
+    dreamer reads. Uses the same sanitized user id as the memory namespace so the
+    dreamer distills transcripts into the right user's memory files."""
+    turns = tc.coerce_turns(req.messages)
+    if not turns:
+        return {"written": 0, "chat_id": req.chat_id, "skipped": "no user/assistant text turns"}
+    written = await tc.write_transcript(
+        instance_name=INSTANCE,
+        chat_id=req.chat_id,
+        user_id=sanitize_user_id(req.user_id),
+        title=req.title,
+        turns=turns,
+    )
+    return {"written": written, "chat_id": req.chat_id, "schema": tc.CHAT_SCHEMA}
 
 
 def main():

@@ -106,9 +106,19 @@ schemas/volumes/catalogs. experiment, app, and database_instance are declared in
       tools active + preamble injected; write/ls/read/edit/search (score 0.871)/
       delete round trip; graceful invalid-path; `/memory off` → 0 tools and tool
       refusal; clean shutdown.
-- [ ] Phase 5 — transcript writer
-      (note: writer must use the same sanitized `PI_MEMORY_USER_ID` for
-      `ai_chatbot.Chat.userId` so the dreamer writes into the right user namespace)
+- [x] **Phase 5 — transcript writer**. `pi-memory/sidecar/transcript_core.py` writes a
+      session's user/assistant text turns into `ai_chatbot."Chat"`/`"Message"` via
+      `LakebaseClient(instance_name=...)`; idempotent DDL + delete-then-insert keyed by
+      the pi session id (safe on fork/clone/reload). Columns/quoting mirror
+      `seed_mock_chat_history.py` so the dreamer's read query runs unchanged. `server.py`
+      exposes `POST /transcript` (runs the sync writes in a thread). The extension's
+      `session_shutdown` reduces `sessionManager.getEntries()` to text turns (drops
+      thinking/tool-call/tool-result/system) and POSTs them before stopping the sidecar;
+      `userId` uses the same sanitized `PI_MEMORY_USER_ID` as the memory namespace, so the
+      dreamer distills a transcript back into the right user. Verified live against
+      Lakebase: DDL/insert, dreamer JOIN read-back, idempotent rewrite (no dupes),
+      blank/non-text turn skipping, HTTP endpoint, and user_id sanitization
+      (`jesse.meade-clift` → `jesse_meade-clift`).
 - [ ] Phase 6 — dreamer jobs
 - [ ] Phase 7 — admin app
 

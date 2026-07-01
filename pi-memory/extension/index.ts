@@ -12,7 +12,9 @@
  *                       (utils_memory.py), each forwarding to the sidecar /invoke.
  *   - before_agent_start: inject the cached memory snapshot into the system prompt,
  *                       mirroring build_memory_preamble() in the stateful agent.
- *   - session_shutdown: stop the sidecar. (Transcript writing lands in Phase 5.)
+ *   - session_shutdown: flush the session transcript to Lakebase (ai_chatbot.Chat/
+ *                       Message) so the dreamer jobs can distill it, then stop the
+ *                       sidecar.
  *
  * Load it with:  pi -e pi-memory/extension/index.ts
  * or symlink/copy into .pi/extensions/ for auto-discovery + /reload.
@@ -167,6 +169,54 @@ async function invoke(
   return data.content ?? "";
 }
 
+// Reduce a pi session's entries to plain user/assistant text turns, matching the
+// shape seed_mock_chat_history.py writes (text-only parts). Thinking blocks, tool
+// calls, tool results, and extension/system messages are dropped.
+type TranscriptTurn = { id: string; role: string; text: string; created_at?: string };
+
+function extractTurns(entries: readonly any[]): TranscriptTurn[] {
+  const turns: TranscriptTurn[] = [];
+  for (const entry of entries) {
+    if (!entry || entry.type !== "message") continue;
+    const msg = entry.message;
+    const role = msg?.role;
+    if (role !== "user" && role !== "assistant") continue;
+
+    let text = "";
+    if (typeof msg.content === "string") {
+      text = msg.content;
+    } else if (Array.isArray(msg.content)) {
+      text = msg.content
+        .filter((b: any) => b && b.type === "text" && typeof b.text === "string")
+        .map((b: any) => b.text)
+        .join("");
+    }
+    if (!text.trim()) continue; // skip image-only / tool-call-only turns
+    turns.push({ id: String(entry.id), role, text, created_at: entry.timestamp });
+  }
+  return turns;
+}
+
+async function postTranscript(
+  chatId: string,
+  title: string,
+  turns: TranscriptTurn[],
+): Promise<number> {
+  const body: Record<string, unknown> = { chat_id: chatId, title, messages: turns };
+  if (USER_ID) body.user_id = USER_ID;
+  const res = await fetch(`${BASE_URL}/transcript`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`sidecar ${res.status}: ${detail.slice(0, 500)}`);
+  }
+  const data = (await res.json()) as { written?: number };
+  return data.written ?? 0;
+}
+
 async function fetchPreamble(): Promise<string> {
   const body: Record<string, unknown> = {};
   if (USER_ID) body.user_id = USER_ID;
@@ -254,7 +304,24 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, ctx) => {
+    // Flush the transcript before tearing the sidecar down. Best-effort: a failed
+    // write must never block shutdown, and an empty session is silently skipped.
+    if (enabled && child) {
+      try {
+        const sm = ctx.sessionManager;
+        const turns = extractTurns(sm.getEntries());
+        if (turns.length > 0) {
+          const chatId = sm.getSessionId();
+          const title = sm.getSessionName() || turns[0].text.slice(0, 80);
+          const written = await postTranscript(chatId, title, turns);
+          ctx.ui.setStatus("pi-memory", `transcript saved (${written} turns)`);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        ctx.ui.notify(`pi-memory transcript write failed: ${msg}`, "error");
+      }
+    }
     stopSidecar();
     enabled = false;
   });
